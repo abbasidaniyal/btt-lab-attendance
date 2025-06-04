@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "Zoom Attendance Tracker",
+  "version": "1.0",
+  "description": "Track attendance in Zoom meetings with customizable options",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "downloads"
+  ],
+  "host_permissions": [
+    "*://*.zoom.us/*",
+    "*://*.zoom.com/*"
+  ],
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.zoom.us/*",
+        "*://*.zoom.com/*"
+      ],
+      "js": ["src/content.js"],
+      "css": ["src/styles.css"]
+    }
+  ],
+  "action": {
+    "default_popup": "src/popup.html",
+    "default_title": "Zoom Attendance Tracker"
+  }
+}

@@ -1,0 +1,10 @@
+/* Additional styles injected into Zoom pages */
+.zoom-attendance-highlight {
+    outline: 2px solid #007bff !important;
+    outline-offset: 2px !important;
+}
+
+.zoom-attendance-processing {
+    opacity: 0.7 !important;
+    pointer-events: none !important;
+}
