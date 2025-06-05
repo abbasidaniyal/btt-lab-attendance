@@ -5,8 +5,9 @@
     // Listen for messages from popup
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.action === 'checkMeetingStatus') {
-            const meetingStatus = checkIfInMeeting();
-            sendResponse(meetingStatus);
+            checkIfInMeeting().then(meetingStatus => {
+                sendResponse(meetingStatus);
+            });
         } else if (request.action === 'captureAttendance') {
             captureAttendance(request.settings).then(result => {
                 sendResponse(result);
@@ -17,7 +18,7 @@
         }
     });
 
-    function checkIfInMeeting() {
+    async function checkIfInMeeting() {
         // Check various indicators that we're in a Zoom meeting
 
         const iframeScope = document.getElementsByClassName("pwa-webclient__iframe")?.[0];
@@ -31,11 +32,12 @@
 
                 const participantPanelButton = iframeScope.contentWindow.document.getElementById('participant');
                 participantPanelButton.getElementsByTagName("button")[0].click();
+                await new Promise(resolve => setTimeout(resolve, 300));
 
                 const participantPanelNew = iframeScope.contentWindow.document.getElementsByClassName('participants-section-container')?.[0];
 
                 if (!participantPanelNew) {
-                    console.warn('Participants panel not found. Make sure you are in a meeting and the participants panel is accessible.');
+                    console.log('Participants panel not found. Make sure you are in a meeting and the participants panel is accessible.');
                     return { inMeeting: false };
                 }
             }
@@ -68,8 +70,8 @@
                 // Check if participants panel is open
                 const participantPanel = iframeScope.contentWindow.document.getElementsByClassName('participants-section-container')?.[0];
                 if (!participantPanel) {
-    
-    
+
+
                     const participantPanelButton = iframeScope.contentWindow.document.getElementById('participant');
                     participantPanelButton.getElementsByTagName("button")[0].click();
                 }
@@ -102,51 +104,84 @@
 
     async function getParticipantData(settings) {
         const participants = [];
-
+    
         const iframeScope = document.getElementsByClassName("pwa-webclient__iframe")?.[0];
-
-        console.log("Iframe scope found:", iframeScope);
-             
-
-        const participantItems = iframeScope.contentWindow.document.querySelectorAll(
-            '.participants-item-position'
-        );
-        console.log("Items found:", participantItems.length);
-        console.log(participantItems)
-
-        for (const item of participantItems) {
-            const participant = extractParticipantInfo(item, settings);
-            if (participant) {
-                participants.push(participant);
-            }
+        if (!iframeScope || !iframeScope.contentWindow) {
+            console.error("Iframe not found or not loaded");
+            return participants;
+        }
+    
+        const scrollArea = iframeScope.contentWindow.document.getElementById('participants-ul');
+        if (!scrollArea) {
+            console.error("Scroll area not found");
+            return participants;
         }
 
+        // scroll to top first
+        scrollArea.scrollTop = 0;
+        await new Promise(resolve => setTimeout(resolve, 300));
+    
+        const seen = new Set();
+        let prevHeight = -1;
+    
+        while (true) {
+            const items = iframeScope.contentWindow.document.querySelectorAll('.participants-item-position');
+    
+            for (const item of items) {
+                const id = item.getAttribute('data-participant-id') || item.innerText;
+                if (!seen.has(id)) {
+                    seen.add(id);
+                    const participant = extractParticipantInfo(item, settings);
+                    if (participant) {
+                        participants.push(participant);
+                    }
+                }
+            }
+    
+            // Scroll down a bit
+            scrollArea.scrollBy(0, 200);
+            await new Promise(resolve => setTimeout(resolve, 300));
+    
+            // If the scroll height doesn't change anymore, break
+            const currentHeight = scrollArea.scrollHeight;
+            if (currentHeight === prevHeight) {
+                break;
+            }
+            prevHeight = currentHeight;
+        }
+    
+        console.log("Total participants extracted:", participants.length);
         return participants;
     }
+    
 
 
     function extractParticipantInfo(item, settings) {
         // Extract name
 
-        let name =  item.querySelector('.participants-item__display-name')?.textContent;
+        let name = item.querySelector('.participants-item__display-name')?.textContent;
 
         if (!name) {
             // Fallback: use text content
             name = item.textContent.trim().split('\n')[0];
         }
 
-        if (!name || name.length === 0) return null;
+        if (!name || name.length === 0) {
+            console.warn('Participant name not found or empty. Skipping this participant.');
+            console.warn(`Item content: ${item.textContent}`);
+            return null
+        };
 
         // Check video status
         const icons = item.querySelectorAll('.participants-icon__icon-box');
 
-        const mic = icons[0];
-        const video = icons[1];
+        const mic = icons[-2];
+        const video = icons[-1];
 
         // for mic, find svg tag and use class name
-        const muted = mic && mic.getElementsByTagName('svg')?.[0].className.baseVal.includes('audio-muted');
+        const muted = mic && mic.getElementsByTagName('svg')?.[0]?.className.baseVal.includes('audio-muted');
 
-        const hasVideo = video && video.getElementsByTagName('svg')?.[0].className.baseVal.includes('video-on');
+        const hasVideo = video && video.getElementsByTagName('svg')?.[0]?.className.baseVal.includes('video-on');
 
         // Determine status
         let status = 'Present';
