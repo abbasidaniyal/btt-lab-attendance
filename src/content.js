@@ -139,11 +139,11 @@
             }
     
             // Scroll down a bit
-            scrollArea.scrollBy(0, 5000);
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            scrollArea.scrollBy(0, 500);
+            await new Promise(resolve => setTimeout(resolve, 1000));
     
             // If the scroll height doesn't change anymore, break
-            const currentHeight = iframeScope.contentWindow.document.getElementById('participants-ul').scrollHeight;
+            const currentHeight = scrollArea.scrollTop;
             if (currentHeight === prevHeight) {
                 break;
             }
@@ -175,8 +175,8 @@
         // Check video status
         const icons = item.querySelectorAll('.participants-icon__icon-box');
 
-        const mic = icons[-2];
-        const video = icons[-1];
+        const mic = icons[icons.length - 2];
+        const video = icons[icons.length - 1];
 
         // for mic, find svg tag and use class name
         const muted = mic && mic.getElementsByTagName('svg')?.[0]?.className.baseVal.includes('audio-muted');
