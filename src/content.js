@@ -119,7 +119,7 @@
 
         // scroll to top first
         scrollArea.scrollTop = 0;
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise(resolve => setTimeout(resolve, 1000));
     
         const seen = new Set();
         let prevHeight = -1;
@@ -139,11 +139,11 @@
             }
     
             // Scroll down a bit
-            scrollArea.scrollBy(0, 200);
-            await new Promise(resolve => setTimeout(resolve, 300));
+            scrollArea.scrollBy(0, 5000);
+            await new Promise(resolve => setTimeout(resolve, 2000));
     
             // If the scroll height doesn't change anymore, break
-            const currentHeight = scrollArea.scrollHeight;
+            const currentHeight = iframeScope.contentWindow.document.getElementById('participants-ul').scrollHeight;
             if (currentHeight === prevHeight) {
                 break;
             }
