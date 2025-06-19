@@ -8,6 +8,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     const countEl = document.getElementById('count');
     const messageEl = document.getElementById('message');
 
+    function updateCaptureButtonText(tracking) {
+        captureBtn.textContent = tracking ? "Stop" : "Start Attendance";
+        captureBtn.style.background = tracking? "red": null;
+    }
+
+    await chrome.runtime.sendMessage({ action: 'get_tracking_state' }, async (response) => {
+        tracking = response.tracking || false;
+        updateCaptureButtonText(tracking);
+        
+    });
+
     // Load saved settings
     const settings = await chrome.storage.sync.get({
         requireCamera: false
@@ -23,7 +34,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Check if we're in a Zoom meeting
     async function checkZoomStatus() {
-        console.log("Checking Zoom status...");
         try {
             const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
@@ -34,10 +44,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
             // Send message to content script to check meeting status
-            chrome.tabs.sendMessage(tab.id, { action: 'checkMeetingStatus' }, (response) => {
+            await chrome.tabs.sendMessage(tab.id, { action: 'checkMeetingStatus' }, (response) => {
 
                 console.log("Response from content script:", response);
-                console.log("Last error:", chrome.runtime.lastError);
+                // console.log("Last error:", chrome.runtime.lastError);
                 if (chrome.runtime.lastError) {
                     updateStatus(false, 'Extension not loaded. Please reload the page.');
                     return;
@@ -74,46 +84,37 @@ document.addEventListener('DOMContentLoaded', async () => {
         }, 3000);
     }
 
-    // Capture attendance
+
+
     captureBtn.addEventListener('click', async () => {
-        try {
+        let tracking = false;
+        await chrome.runtime.sendMessage({ action: 'get_tracking_state' }, async (response) => {
+            console.log("Response from background script:", response);
+            tracking = response.tracking || false;
+
+            const newTrackingStatus = !tracking;
+
+            showMessage(tracking, newTrackingStatus ? 'Tracking in progress' : 'Ready to track');
+
             const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-            const settings = {
-                requireCamera: requireCameraCheckbox.checked,
-            };
 
-            captureBtn.textContent = 'Capturing...';
-            captureBtn.disabled = true;
-
-            chrome.tabs.sendMessage(tab.id, {
-                action: 'captureAttendance',
-                settings: settings
-            }, (response) => {
-                captureBtn.textContent = 'Capture Attendance';
-                captureBtn.disabled = false;
-
-                if (chrome.runtime.lastError) {
-                    showMessage('Error: Extension not responding', 'error');
-                    return;
-                }
-
-                if (response && response.success) {
-                    showMessage(`Attendance captured! Downloaded ${response.filename}`);
-                } else {
-                    showMessage(response?.error || 'Failed to capture attendance', 'error');
-                }
+            chrome.runtime.sendMessage({
+                action: newTrackingStatus ? "start_tracking" : "stop_tracking",
+                tabId: tab.id,
+                requireCamera: requireCameraCheckbox.checked
             });
-        } catch (error) {
-            captureBtn.textContent = 'Capture Attendance';
-            captureBtn.disabled = false;
-            showMessage('Error capturing attendance', 'error');
-        }
+
+            updateCaptureButtonText(newTrackingStatus);
+
+        });
+
     });
+
 
     // Initial status check
     checkZoomStatus();
 
-    // Refresh status every 2 seconds
-    setInterval(checkZoomStatus, 5000);
+    // Refresh status every 5 seconds
+    setInterval(checkZoomStatus, 5 * 1000);
 });

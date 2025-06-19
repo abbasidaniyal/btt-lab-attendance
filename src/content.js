@@ -14,14 +14,24 @@
             }).catch(error => {
                 sendResponse({ success: false, error: error.message });
             });
-            return true; // Keep message channel open for async response
+        } else if (request.action === 'captureAttendanceV2') {
+            captureAttendanceV2(request.settings).then(result => {
+                sendResponse(result);
+            }).catch(error => {
+                sendResponse({ success: false, error: error.message });
+            });
         }
+        return true; // Keep message channel open for async response
     });
+
+    function getZoomIframe(){
+        return document.getElementsByClassName("pwa-webclient__iframe")?.[0];
+    }
 
     async function checkIfInMeeting() {
         // Check various indicators that we're in a Zoom meeting
 
-        const iframeScope = document.getElementsByClassName("pwa-webclient__iframe")?.[0];
+        const iframeScope = getZoomIframe();
 
         if (iframeScope) {
 
@@ -60,6 +70,29 @@
     async function captureAttendance(settings) {
         try {
             // Wait a bit to ensure UI is stable
+            const response = await captureAttendanceV2(settings);
+
+
+            const outputFormat = settings.outputFormat || "csv";
+            const filename = generateFilename(outputFormat);
+            const content = formatData(response.participants, outputFormat);
+
+            await downloadFile(content, filename, outputFormat);
+
+            return {
+                success: true,
+                filename: filename,
+                participantCount: response.participants.length
+            };
+        } catch (error) {
+            console.error('Error capturing attendance:', error);
+            throw error;
+        }
+    }
+
+    async function captureAttendanceV2(settings) {
+        try {
+            // Wait a bit to ensure UI is stable
             await new Promise(resolve => setTimeout(resolve, 500));
 
             // First try to open participants panel if not already open
@@ -86,21 +119,19 @@
                 throw new Error('No participants found. Make sure the participants panel is accessible.');
             }
 
-            const filename = generateFilename(settings.outputFormat);
-            const content = formatData(participants, settings.outputFormat);
-
-            await downloadFile(content, filename, settings.outputFormat);
 
             return {
                 success: true,
-                filename: filename,
-                participantCount: participants.length
+                data: participants,
+                participantCount: participants.length,
+                timestamp: new Date().toLocaleString()
             };
         } catch (error) {
             console.error('Error capturing attendance:', error);
             throw error;
         }
     }
+
 
     async function getParticipantData(settings) {
         const participants = [];
@@ -123,6 +154,8 @@
     
         const seen = new Set();
         let prevHeight = -1;
+
+        const time = new Date().toLocaleString();        
     
         while (true) {
             const items = iframeScope.contentWindow.document.querySelectorAll('.participants-item-position');
@@ -131,7 +164,7 @@
                 const id = item.getAttribute('data-participant-id') || item.innerText;
                 if (!seen.has(id)) {
                     seen.add(id);
-                    const participant = extractParticipantInfo(item, settings);
+                    const participant = extractParticipantInfo(item, settings, time);
                     if (participant) {
                         participants.push(participant);
                     }
@@ -156,7 +189,7 @@
     
 
 
-    function extractParticipantInfo(item, settings) {
+    function extractParticipantInfo(item, settings, time) {
         // Extract name
 
         let name = item.querySelector('.participants-item__display-name')?.textContent;
@@ -197,7 +230,7 @@
             status: status,
             reason: reason,
             hasVideo: hasVideo,
-            timestamp: new Date().toISOString()
+            timestamp: time
         };
     }
 
